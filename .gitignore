@@ -1,0 +1,8 @@
+.venv/
+__pycache__/
+*.pyc
+*.dll
+*.so
+*.h5
+*.png
+
