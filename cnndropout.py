@@ -33,34 +33,58 @@ test_gen = datagen.flow_from_directory(
 class_names = list(train_gen.class_indices.keys())
 
 # ============================
-# MODELO CNN CON DROPOUT
+# TUNING DEL LEARNING RATE
 # ============================
-model = models.Sequential([
-    layers.Conv2D(32, (3,3), activation="relu", input_shape=(64, 64, 3)),
-    layers.MaxPooling2D(2,2),
+learning_rates = [1e-2, 1e-3, 1e-4]
+best_lr = None
+best_val_acc = -1
 
-    layers.Conv2D(64, (3,3), activation="relu"),
-    layers.MaxPooling2D(2,2),
+def build_model():
+    model = models.Sequential([
+        layers.Conv2D(32, (3,3), activation="relu", input_shape=(64, 64, 3)),
+        layers.MaxPooling2D(2,2),
 
-    layers.Conv2D(128, (3,3), activation="relu"),
-    layers.MaxPooling2D(2,2),
+        layers.Conv2D(64, (3,3), activation="relu"),
+        layers.MaxPooling2D(2,2),
 
-    layers.Flatten(),
-    layers.Dense(128, activation="relu"),
-    layers.Dropout(0.5),
-    layers.Dense(5, activation="softmax")
-])
+        layers.Conv2D(128, (3,3), activation="relu"),
+        layers.MaxPooling2D(2,2),
 
-model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+        layers.Flatten(),
+        layers.Dense(128, activation="relu"),
+        layers.Dropout(0.5),
+        layers.Dense(5, activation="softmax")
+    ])
+    return model
+
+print("\n=== TUNING DEL LEARNING RATE ===")
+for lr in learning_rates:
+    temp_model = build_model()
+    temp_model.compile(optimizer=tf.keras.optimizers.Adam(lr),
+                       loss="categorical_crossentropy",
+                       metrics=["accuracy"])
+
+    print(f"\nProbando learning rate = {lr} ...")
+    history = temp_model.fit(train_gen, validation_data=val_gen, epochs=3, verbose=0)
+
+    val_acc = history.history["val_accuracy"][-1]
+    print(f"Val_accuracy = {val_acc:.4f}")
+
+    if val_acc > best_val_acc:
+        best_val_acc = val_acc
+        best_lr = lr
+
+print(f"\n>>> Mejor learning rate encontrado: {best_lr}\n")
 
 # ============================
-# ENTRENAMIENTO
+# ENTRENAMIENTO FINAL
 # ============================
-history = model.fit(
-    train_gen,
-    validation_data=val_gen,
-    epochs=20
-)
+model = build_model()
+model.compile(optimizer=tf.keras.optimizers.Adam(best_lr),
+              loss="categorical_crossentropy",
+              metrics=["accuracy"])
+
+history = model.fit(train_gen, validation_data=val_gen, epochs=20)
 
 # ============================
 # EVALUACIÓN EN TEST
@@ -94,7 +118,6 @@ print("===============================\n")
 # GRÁFICAS ACCURACY / LOSS
 # ============================
 
-# Accuracy
 plt.figure(figsize=(8,5))
 plt.plot(history.history["accuracy"], label="Train Accuracy")
 plt.plot(history.history["val_accuracy"], label="Val Accuracy")
@@ -106,7 +129,6 @@ plt.grid()
 plt.savefig("accuracy_dropout.png")
 plt.close()
 
-# Loss
 plt.figure(figsize=(8,5))
 plt.plot(history.history["loss"], label="Train Loss")
 plt.plot(history.history["val_loss"], label="Val Loss")
